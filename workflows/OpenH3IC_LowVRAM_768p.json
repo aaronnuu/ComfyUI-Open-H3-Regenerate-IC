@@ -1,0 +1,525 @@
+{
+  "last_node_id": 9,
+  "last_link_id": 13,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "LoadVideo",
+      "pos": [
+        20,
+        60
+      ],
+      "size": [
+        300,
+        180
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "VIDEO",
+          "type": "VIDEO",
+          "links": [
+            1
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LoadVideo"
+      },
+      "widgets_values": [
+        "draft.mp4"
+      ]
+    },
+    {
+      "id": 2,
+      "type": "GetVideoComponents",
+      "pos": [
+        360,
+        60
+      ],
+      "size": [
+        260,
+        110
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "video",
+          "type": "VIDEO",
+          "link": 1
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": [
+            2
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "links": [
+            3
+          ],
+          "slot_index": 1
+        },
+        {
+          "name": "fps",
+          "type": "FLOAT",
+          "links": [
+            4
+          ],
+          "slot_index": 2
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "GetVideoComponents"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 3,
+      "type": "OpenH3ICLoader",
+      "pos": [
+        20,
+        350
+      ],
+      "size": [
+        380,
+        500
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "pipeline",
+          "type": "OPEN_H3_IC_PIPELINE",
+          "links": [
+            5,
+            6,
+            7
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "OpenH3ICLoader"
+      },
+      "widgets_values": [
+        "open_h3_ic",
+        "disk",
+        256,
+        1,
+        "online",
+        1024,
+        192,
+        48,
+        3,
+        5,
+        48,
+        2,
+        ""
+      ]
+    },
+    {
+      "id": 4,
+      "type": "OpenH3ICEncode",
+      "pos": [
+        680,
+        70
+      ],
+      "size": [
+        380,
+        340
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "pipeline",
+          "type": "OPEN_H3_IC_PIPELINE",
+          "link": 5
+        },
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 2
+        },
+        {
+          "name": "input_fps",
+          "type": "FLOAT",
+          "link": 4,
+          "widget": {
+            "name": "input_fps"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "draft",
+          "type": "OPEN_H3_IC_DRAFT",
+          "links": [
+            8
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "OpenH3ICEncode"
+      },
+      "widgets_values": [
+        24.0,
+        "",
+        "768p",
+        "576",
+        0,
+        "fixed"
+      ]
+    },
+    {
+      "id": 5,
+      "type": "OpenH3ICSampler",
+      "pos": [
+        1110,
+        70
+      ],
+      "size": [
+        330,
+        240
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "pipeline",
+          "type": "OPEN_H3_IC_PIPELINE",
+          "link": 6
+        },
+        {
+          "name": "draft",
+          "type": "OPEN_H3_IC_DRAFT",
+          "link": 8
+        }
+      ],
+      "outputs": [
+        {
+          "name": "ic_latent",
+          "type": "LATENT",
+          "links": [
+            9
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "OpenH3ICSampler"
+      },
+      "widgets_values": [
+        "up3",
+        1.0,
+        0,
+        "fixed"
+      ]
+    },
+    {
+      "id": 6,
+      "type": "OpenH3ICDecode",
+      "pos": [
+        1490,
+        70
+      ],
+      "size": [
+        330,
+        200
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "pipeline",
+          "type": "OPEN_H3_IC_PIPELINE",
+          "link": 7
+        },
+        {
+          "name": "ic_latent",
+          "type": "LATENT",
+          "link": 9
+        },
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 3
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": [
+            10
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "fps",
+          "type": "FLOAT",
+          "links": [
+            11
+          ],
+          "slot_index": 1
+        },
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "links": [
+            12
+          ],
+          "slot_index": 2
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "OpenH3ICDecode"
+      },
+      "widgets_values": [
+        "standard"
+      ]
+    },
+    {
+      "id": 7,
+      "type": "CreateVideo",
+      "pos": [
+        1870,
+        70
+      ],
+      "size": [
+        280,
+        160
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 10
+        },
+        {
+          "name": "fps",
+          "type": "FLOAT",
+          "link": 11,
+          "widget": {
+            "name": "fps"
+          }
+        },
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 12
+        }
+      ],
+      "outputs": [
+        {
+          "name": "VIDEO",
+          "type": "VIDEO",
+          "links": [
+            13
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "CreateVideo"
+      },
+      "widgets_values": [
+        24.0
+      ]
+    },
+    {
+      "id": 8,
+      "type": "SaveVideo",
+      "pos": [
+        2200,
+        70
+      ],
+      "size": [
+        330,
+        200
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "video",
+          "type": "VIDEO",
+          "link": 13
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "SaveVideo"
+      },
+      "widgets_values": [
+        "OpenH3IC/refined",
+        "mp4",
+        "h264"
+      ]
+    },
+    {
+      "id": 9,
+      "type": "MarkdownNote",
+      "pos": [
+        680,
+        470
+      ],
+      "size": [
+        750,
+        300
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "MarkdownNote"
+      },
+      "widgets_values": [
+        "# Open H3 Regenerate IC\n\n1. Install requirements and download IC Diffusers weights to models/open_h3_ic.\n2. Select a 4.7–5.2 second draft in LoadVideo (first 124 frames at 24 fps).\n3. Enter the original draft prompt in caption.\n4. Keep standard VAE for lower VRAM. Use IC Decode for this normalized latent.\n\nLow VRAM: lower token_chunk/head_chunk; online streams K/V. Disk offload needs substantial SSD space.\nUpscaler tiles can slightly change detail/normalization. Full trained-model inference has not been benchmarked."
+      ]
+    }
+  ],
+  "links": [
+    [
+      1,
+      1,
+      0,
+      2,
+      0,
+      "VIDEO"
+    ],
+    [
+      2,
+      2,
+      0,
+      4,
+      1,
+      "IMAGE"
+    ],
+    [
+      3,
+      2,
+      1,
+      6,
+      2,
+      "AUDIO"
+    ],
+    [
+      4,
+      2,
+      2,
+      4,
+      2,
+      "FLOAT"
+    ],
+    [
+      5,
+      3,
+      0,
+      4,
+      0,
+      "OPEN_H3_IC_PIPELINE"
+    ],
+    [
+      6,
+      3,
+      0,
+      5,
+      0,
+      "OPEN_H3_IC_PIPELINE"
+    ],
+    [
+      7,
+      3,
+      0,
+      6,
+      0,
+      "OPEN_H3_IC_PIPELINE"
+    ],
+    [
+      8,
+      4,
+      0,
+      5,
+      1,
+      "OPEN_H3_IC_DRAFT"
+    ],
+    [
+      9,
+      5,
+      0,
+      6,
+      1,
+      "LATENT"
+    ],
+    [
+      10,
+      6,
+      0,
+      7,
+      0,
+      "IMAGE"
+    ],
+    [
+      11,
+      6,
+      1,
+      7,
+      1,
+      "FLOAT"
+    ],
+    [
+      12,
+      6,
+      2,
+      7,
+      2,
+      "AUDIO"
+    ],
+    [
+      13,
+      7,
+      0,
+      8,
+      0,
+      "VIDEO"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.65,
+      "offset": [
+        50,
+        80
+      ]
+    }
+  },
+  "version": 0.4
+}
