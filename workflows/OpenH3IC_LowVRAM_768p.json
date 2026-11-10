@@ -1,17 +1,17 @@
 {
-  "last_node_id": 9,
-  "last_link_id": 13,
+  "last_node_id": 12,
+  "last_link_id": 17,
   "nodes": [
     {
       "id": 1,
       "type": "LoadVideo",
       "pos": [
         20,
-        60
+        30
       ],
       "size": [
-        300,
-        180
+        360,
+        140
       ],
       "flags": {},
       "order": 0,
@@ -39,11 +39,11 @@
       "type": "GetVideoComponents",
       "pos": [
         360,
-        60
+        30
       ],
       "size": [
-        260,
-        110
+        360,
+        140
       ],
       "flags": {},
       "order": 1,
@@ -60,7 +60,7 @@
           "name": "images",
           "type": "IMAGE",
           "links": [
-            2
+            5
           ],
           "slot_index": 0
         },
@@ -68,7 +68,7 @@
           "name": "audio",
           "type": "AUDIO",
           "links": [
-            3
+            7
           ],
           "slot_index": 1
         },
@@ -76,9 +76,21 @@
           "name": "fps",
           "type": "FLOAT",
           "links": [
-            4
+            6
           ],
           "slot_index": 2
+        },
+        {
+          "name": "bit_depth",
+          "type": "COMBO",
+          "links": [],
+          "slot_index": 3
+        },
+        {
+          "name": "color_space",
+          "type": "COMBO",
+          "links": [],
+          "slot_index": 4
         }
       ],
       "properties": {
@@ -88,14 +100,14 @@
     },
     {
       "id": 3,
-      "type": "OpenH3ICLoader",
+      "type": "UNETLoader",
       "pos": [
         20,
-        350
+        400
       ],
       "size": [
-        380,
-        500
+        360,
+        160
       ],
       "flags": {},
       "order": 2,
@@ -103,77 +115,204 @@
       "inputs": [],
       "outputs": [
         {
-          "name": "pipeline",
-          "type": "OPEN_H3_IC_PIPELINE",
+          "name": "MODEL",
+          "type": "MODEL",
           "links": [
-            5,
-            6,
-            7
+            2
           ],
           "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "UNETLoader"
+      },
+      "widgets_values": [
+        "minimax_h3_ref2va_int8_convrot.safetensors",
+        "default"
+      ]
+    },
+    {
+      "id": 4,
+      "type": "CLIPLoader",
+      "pos": [
+        20,
+        650
+      ],
+      "size": [
+        360,
+        190
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": [
+            3
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "CLIPLoader"
+      },
+      "widgets_values": [
+        "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+        "minimax",
+        "default"
+      ]
+    },
+    {
+      "id": 5,
+      "type": "VAELoader",
+      "pos": [
+        20,
+        900
+      ],
+      "size": [
+        360,
+        140
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "links": [
+            4,
+            12
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VAELoader"
+      },
+      "widgets_values": [
+        "minimax_h3_video_vae_fp16.safetensors"
+      ]
+    },
+    {
+      "id": 6,
+      "type": "OpenH3ICLoader",
+      "pos": [
+        670,
+        350
+      ],
+      "size": [
+        360,
+        422
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 2
+        }
+      ],
+      "outputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "links": [
+            8
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "sigmas",
+          "type": "SIGMAS",
+          "links": [
+            11
+          ],
+          "slot_index": 1
         }
       ],
       "properties": {
         "Node name for S&R": "OpenH3ICLoader"
       },
       "widgets_values": [
-        "open_h3_ic",
-        "disk",
-        256,
+        "open_h3_regenerate_2k_ic_lora.safetensors",
+        "minimax_h3_hyperflow_8step_v1.0.safetensors",
+        "minimax_h3_lms_v1.0_r64.safetensors",
+        "up3",
+        1.0,
+        "bf16",
+        512,
         1,
         "online",
-        1024,
-        192,
-        48,
-        3,
-        5,
-        48,
-        2,
-        ""
+        1024
       ]
     },
     {
-      "id": 4,
+      "id": 7,
       "type": "OpenH3ICEncode",
       "pos": [
-        680,
-        70
+        1100,
+        30
       ],
       "size": [
-        380,
-        340
+        360,
+        510
       ],
       "flags": {},
-      "order": 3,
+      "order": 6,
       "mode": 0,
       "inputs": [
         {
-          "name": "pipeline",
-          "type": "OPEN_H3_IC_PIPELINE",
-          "link": 5
+          "name": "clip",
+          "type": "CLIP",
+          "link": 3
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 4
         },
         {
           "name": "images",
           "type": "IMAGE",
-          "link": 2
+          "link": 5
         },
         {
           "name": "input_fps",
           "type": "FLOAT",
-          "link": 4,
+          "link": 6,
           "widget": {
             "name": "input_fps"
           }
+        },
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 7
         }
       ],
       "outputs": [
         {
-          "name": "draft",
-          "type": "OPEN_H3_IC_DRAFT",
+          "name": "positive",
+          "type": "CONDITIONING",
           "links": [
-            8
+            9
           ],
           "slot_index": 0
+        },
+        {
+          "name": "latent",
+          "type": "LATENT",
+          "links": [
+            10
+          ],
+          "slot_index": 1
         }
       ],
       "properties": {
@@ -183,43 +322,57 @@
         24.0,
         "",
         "768p",
-        "576",
-        0,
-        "fixed"
+        "384",
+        "minimax_h3_latent_upscaler_3d_conv_v1_bf16.safetensors",
+        192,
+        48,
+        5,
+        5,
+        32
       ]
     },
     {
-      "id": 5,
+      "id": 8,
       "type": "OpenH3ICSampler",
       "pos": [
-        1110,
-        70
+        1550,
+        350
       ],
       "size": [
-        330,
-        240
+        360,
+        278
       ],
       "flags": {},
-      "order": 4,
+      "order": 7,
       "mode": 0,
       "inputs": [
         {
-          "name": "pipeline",
-          "type": "OPEN_H3_IC_PIPELINE",
-          "link": 6
+          "name": "model",
+          "type": "MODEL",
+          "link": 8
         },
         {
-          "name": "draft",
-          "type": "OPEN_H3_IC_DRAFT",
-          "link": 8
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 9
+        },
+        {
+          "name": "latent",
+          "type": "LATENT",
+          "link": 10
+        },
+        {
+          "name": "sigmas",
+          "type": "SIGMAS",
+          "link": 11
         }
       ],
       "outputs": [
         {
-          "name": "ic_latent",
+          "name": "LATENT",
           "type": "LATENT",
           "links": [
-            9
+            13
           ],
           "slot_index": 0
         }
@@ -228,41 +381,35 @@
         "Node name for S&R": "OpenH3ICSampler"
       },
       "widgets_values": [
-        "up3",
-        1.0,
         0,
-        "fixed"
+        "fixed",
+        2
       ]
     },
     {
-      "id": 6,
+      "id": 9,
       "type": "OpenH3ICDecode",
       "pos": [
-        1490,
-        70
+        1950,
+        350
       ],
       "size": [
-        330,
-        200
+        360,
+        204
       ],
       "flags": {},
-      "order": 5,
+      "order": 8,
       "mode": 0,
       "inputs": [
         {
-          "name": "pipeline",
-          "type": "OPEN_H3_IC_PIPELINE",
-          "link": 7
+          "name": "vae",
+          "type": "VAE",
+          "link": 12
         },
         {
-          "name": "ic_latent",
+          "name": "latent",
           "type": "LATENT",
-          "link": 9
-        },
-        {
-          "name": "audio",
-          "type": "AUDIO",
-          "link": 3
+          "link": 13
         }
       ],
       "outputs": [
@@ -270,7 +417,7 @@
           "name": "images",
           "type": "IMAGE",
           "links": [
-            10
+            14
           ],
           "slot_index": 0
         },
@@ -278,7 +425,7 @@
           "name": "fps",
           "type": "FLOAT",
           "links": [
-            11
+            15
           ],
           "slot_index": 1
         },
@@ -286,7 +433,7 @@
           "name": "audio",
           "type": "AUDIO",
           "links": [
-            12
+            16
           ],
           "slot_index": 2
         }
@@ -295,33 +442,34 @@
         "Node name for S&R": "OpenH3ICDecode"
       },
       "widgets_values": [
-        "standard"
+        192,
+        48
       ]
     },
     {
-      "id": 7,
+      "id": 10,
       "type": "CreateVideo",
       "pos": [
-        1870,
-        70
+        2350,
+        350
       ],
       "size": [
-        280,
-        160
+        360,
+        196
       ],
       "flags": {},
-      "order": 6,
+      "order": 9,
       "mode": 0,
       "inputs": [
         {
           "name": "images",
           "type": "IMAGE",
-          "link": 10
+          "link": 14
         },
         {
           "name": "fps",
           "type": "FLOAT",
-          "link": 11,
+          "link": 15,
           "widget": {
             "name": "fps"
           }
@@ -329,7 +477,7 @@
         {
           "name": "audio",
           "type": "AUDIO",
-          "link": 12
+          "link": 16
         }
       ],
       "outputs": [
@@ -337,7 +485,7 @@
           "name": "VIDEO",
           "type": "VIDEO",
           "links": [
-            13
+            17
           ],
           "slot_index": 0
         }
@@ -346,61 +494,64 @@
         "Node name for S&R": "CreateVideo"
       },
       "widgets_values": [
-        24.0
+        30.0
       ]
     },
     {
-      "id": 8,
+      "id": 11,
       "type": "SaveVideo",
       "pos": [
-        2200,
-        70
+        2700,
+        350
       ],
       "size": [
-        330,
-        200
+        360,
+        212
       ],
       "flags": {},
-      "order": 7,
+      "order": 10,
       "mode": 0,
       "inputs": [
         {
           "name": "video",
           "type": "VIDEO",
-          "link": 13
+          "link": 17
         }
       ],
-      "outputs": [],
+      "outputs": [
+        {
+          "name": "video",
+          "type": "VIDEO",
+          "links": [],
+          "slot_index": 0
+        }
+      ],
       "properties": {
         "Node name for S&R": "SaveVideo"
       },
       "widgets_values": [
         "OpenH3IC/refined",
         "mp4",
-        "h264"
+        "auto"
       ]
     },
     {
-      "id": 9,
-      "type": "MarkdownNote",
+      "id": 12,
+      "type": "Note",
       "pos": [
-        680,
-        470
+        670,
+        1040
       ],
       "size": [
-        750,
-        300
+        650,
+        240
       ],
       "flags": {},
-      "order": 8,
+      "order": 11,
       "mode": 0,
-      "inputs": [],
-      "outputs": [],
-      "properties": {
-        "Node name for S&R": "MarkdownNote"
-      },
+      "properties": {},
       "widgets_values": [
-        "# Open H3 Regenerate IC\n\n1. Install requirements and download IC Diffusers weights to models/open_h3_ic.\n2. Select a 4.7–5.2 second draft in LoadVideo (first 124 frames at 24 fps).\n3. Enter the original draft prompt in caption.\n4. Keep standard VAE for lower VRAM. Use IC Decode for this normalized latent.\n\nLow VRAM: lower token_chunk/head_chunk; online streams K/V. Disk offload needs substantial SSD space.\nUpscaler tiles can slightly change detail/normalization. Full trained-model inference has not been benchmarked."
+        "Native v0.2: select a NON-PRUNED Ref2VA MODEL (time_embedder required), H3 Qwen3-VL CLIP (type=minimax), stock video VAE, and the three ORIGINAL official LoRAs. Run scripts/download_models.py --assets-only first. This workflow replaces the old Diffusers pipeline. 24 fps; >=113 real frames; first 124 used. Chunking saves VRAM but uses RAM and is slower."
       ]
     }
   ],
@@ -415,97 +566,129 @@
     ],
     [
       2,
-      2,
+      3,
       0,
-      4,
-      1,
-      "IMAGE"
+      6,
+      0,
+      "MODEL"
     ],
     [
       3,
-      2,
-      1,
-      6,
-      2,
-      "AUDIO"
+      4,
+      0,
+      7,
+      0,
+      "CLIP"
     ],
     [
       4,
+      5,
+      0,
+      7,
+      1,
+      "VAE"
+    ],
+    [
+      5,
+      2,
+      0,
+      7,
+      2,
+      "IMAGE"
+    ],
+    [
+      6,
       2,
       2,
-      4,
-      2,
+      7,
+      3,
       "FLOAT"
     ],
     [
-      5,
-      3,
-      0,
-      4,
-      0,
-      "OPEN_H3_IC_PIPELINE"
-    ],
-    [
-      6,
-      3,
-      0,
-      5,
-      0,
-      "OPEN_H3_IC_PIPELINE"
-    ],
-    [
       7,
-      3,
-      0,
-      6,
-      0,
-      "OPEN_H3_IC_PIPELINE"
+      2,
+      1,
+      7,
+      4,
+      "AUDIO"
     ],
     [
       8,
-      4,
+      6,
       0,
-      5,
-      1,
-      "OPEN_H3_IC_DRAFT"
+      8,
+      0,
+      "MODEL"
     ],
     [
       9,
-      5,
+      7,
       0,
-      6,
+      8,
       1,
-      "LATENT"
+      "CONDITIONING"
     ],
     [
       10,
-      6,
-      0,
       7,
-      0,
-      "IMAGE"
+      1,
+      8,
+      2,
+      "LATENT"
     ],
     [
       11,
       6,
       1,
-      7,
+      8,
+      3,
+      "SIGMAS"
+    ],
+    [
+      12,
+      5,
+      0,
+      9,
+      0,
+      "VAE"
+    ],
+    [
+      13,
+      8,
+      0,
+      9,
+      1,
+      "LATENT"
+    ],
+    [
+      14,
+      9,
+      0,
+      10,
+      0,
+      "IMAGE"
+    ],
+    [
+      15,
+      9,
+      1,
+      10,
       1,
       "FLOAT"
     ],
     [
-      12,
-      6,
+      16,
+      9,
       2,
-      7,
+      10,
       2,
       "AUDIO"
     ],
     [
-      13,
-      7,
+      17,
+      10,
       0,
-      8,
+      11,
       0,
       "VIDEO"
     ]
@@ -516,8 +699,8 @@
     "ds": {
       "scale": 0.65,
       "offset": [
-        50,
-        80
+        80,
+        60
       ]
     }
   },

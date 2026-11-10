@@ -1,7 +1,7 @@
 [project]
 name = "comfyui-open-h3-regenerate-ic"
-version = "0.1.0"
-description = "Open-H3-Regenerate-2K-IC nodes with streamed activations and configurable VRAM chunking"
+version = "0.2.0"
+description = "Native ComfyUI Open-H3 IC official LoRA nodes with full-context VRAM chunking"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }

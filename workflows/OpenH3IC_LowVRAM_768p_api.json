@@ -15,28 +15,54 @@
     }
   },
   "3": {
-    "class_type": "OpenH3ICLoader",
+    "class_type": "UNETLoader",
     "inputs": {
-      "weights_dir": "open_h3_ic",
-      "weight_offload": "disk",
-      "token_chunk": 256,
-      "head_chunk": 1,
-      "attention": "online",
-      "key_chunk": 1024,
-      "vae_tile": 192,
-      "vae_overlap": 48,
-      "upscale_frames": 3,
-      "upscale_overlap": 5,
-      "upscale_tile": 48,
-      "oom_retries": 2,
-      "offload_dir": ""
+      "unet_name": "minimax_h3_ref2va_int8_convrot.safetensors",
+      "weight_dtype": "default"
     }
   },
   "4": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+      "type": "minimax",
+      "device": "default"
+    }
+  },
+  "5": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "minimax_h3_video_vae_fp16.safetensors"
+    }
+  },
+  "6": {
+    "class_type": "OpenH3ICLoader",
+    "inputs": {
+      "model": [
+        "3",
+        0
+      ],
+      "ic_lora": "open_h3_regenerate_2k_ic_lora.safetensors",
+      "hyperflow_lora": "minimax_h3_hyperflow_8step_v1.0.safetensors",
+      "sharp_lora": "minimax_h3_lms_v1.0_r64.safetensors",
+      "sampler": "up3",
+      "sharp_strength": 1.0,
+      "lora_dtype": "bf16",
+      "token_chunk": 512,
+      "head_chunk": 1,
+      "attention": "online",
+      "key_chunk": 1024
+    }
+  },
+  "7": {
     "class_type": "OpenH3ICEncode",
     "inputs": {
-      "pipeline": [
-        "3",
+      "clip": [
+        "4",
+        0
+      ],
+      "vae": [
+        "5",
         0
       ],
       "images": [
@@ -49,71 +75,84 @@
       ],
       "caption": "",
       "resolution": "768p",
-      "lq_for_768p": "576",
-      "seed": 0
-    }
-  },
-  "5": {
-    "class_type": "OpenH3ICSampler",
-    "inputs": {
-      "pipeline": [
-        "3",
-        0
-      ],
-      "draft": [
-        "4",
-        0
-      ],
-      "sampler": "up3",
-      "sharp": 1.0,
-      "seed": 0
-    }
-  },
-  "6": {
-    "class_type": "OpenH3ICDecode",
-    "inputs": {
-      "pipeline": [
-        "3",
-        0
-      ],
-      "ic_latent": [
-        "5",
-        0
-      ],
-      "decoder": "standard",
+      "lq_for_768p": "384",
+      "upscaler_model": "minimax_h3_latent_upscaler_3d_conv_v1_bf16.safetensors",
+      "vae_tile": 192,
+      "vae_overlap": 48,
+      "upscale_frames": 5,
+      "upscale_overlap": 5,
+      "upscale_tile": 32,
       "audio": [
         "2",
         1
       ]
     }
   },
-  "7": {
-    "class_type": "CreateVideo",
+  "8": {
+    "class_type": "OpenH3ICSampler",
     "inputs": {
-      "images": [
+      "model": [
         "6",
         0
       ],
-      "fps": [
+      "positive": [
+        "7",
+        0
+      ],
+      "latent": [
+        "7",
+        1
+      ],
+      "sigmas": [
         "6",
         1
       ],
+      "seed": 0,
+      "oom_retries": 2
+    }
+  },
+  "9": {
+    "class_type": "OpenH3ICDecode",
+    "inputs": {
+      "vae": [
+        "5",
+        0
+      ],
+      "latent": [
+        "8",
+        0
+      ],
+      "vae_tile": 192,
+      "vae_overlap": 48
+    }
+  },
+  "10": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "images": [
+        "9",
+        0
+      ],
+      "fps": [
+        "9",
+        1
+      ],
       "audio": [
-        "6",
+        "9",
         2
       ]
     }
   },
-  "8": {
+  "11": {
     "class_type": "SaveVideo",
     "inputs": {
       "video": [
-        "7",
+        "10",
         0
       ],
       "filename_prefix": "OpenH3IC/refined",
       "format": "mp4",
-      "codec": "h264"
+      "format.codec": "auto"
     }
   }
 }

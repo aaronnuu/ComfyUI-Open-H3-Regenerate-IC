@@ -1,5 +1,5 @@
 # Model-only extraction from LBH-123-AI / NVLabs upscaler_node.py (MIT).
-# See ref2va_ic/LICENSE-upscaler-node.txt; neural layers are unchanged.
+# See LICENSE-upscaler-node.txt; neural layers are unchanged.
 import re
 import torch
 import torch.nn as nn

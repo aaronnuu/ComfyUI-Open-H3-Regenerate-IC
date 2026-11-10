@@ -1,138 +1,121 @@
-# ComfyUI Open-H3-Regenerate-IC
+# ComfyUI Open-H3 Regenerate IC
 
-将 [NVLabs Open-H3-Regenerate-2K/IC](https://github.com/NVlabs/Sana/tree/sol-engine/models/Open-H3-Regenerate-2K/IC)
-封装成 ComfyUI 节点，并加入显存分块。输入低清草稿视频和原始提示词，通过
-**Ref2VA + HyperFlow + LMS Sharp + IC LoRA** 重生成 768p、1080p、2K 或 4K 视频。
-原视频保留为参考上下文，原音轨通过节点传递并裁切到输出时长。
+**v0.2：使用 ComfyUI 原生 MODEL / CLIP / VAE，直接加载官方原版 LoRA，并保留显存分块。**
 
-这是 **IC 专用实现**，需要 IC 仓库中的 Diffusers 权重目录。旧版非 IC refiner LoRA、
-原生 ComfyUI 单文件模型、GGUF 或旧版工作流不能直接替代这些权重。
+把草稿视频作为 Ref2VA 的 `<Video 1>`，使用 Open-H3-Regenerate-2K-IC 增强至 768p、1080p、2K 或 4K。
+不再要求旧版的 `weights_dir`、Diffusers 模型目录或额外的独立推理管线。
 
-## 节点
-
-分类：`video / Open H3 IC`，搜索 `Open H3 IC`。
-
-| 节点 | 作用 |
-| --- | --- |
-| 模型与显存分块 `OpenH3ICLoader` | 配置权重、卸载方式、注意力／前馈／放大／VAE 分块；实际权重按阶段加载 |
-| 视频编码 `OpenH3ICEncode` | 24 fps 重采样、裁切、分块 VAE 编码、Qwen3-VL 视频上下文编码 |
-| 高清重生成 `OpenH3ICSampler` | `up3`、`up4`、`hf8`；完整参考上下文和 HyperFlow 双时间嵌入 |
-| 分块解码 `OpenH3ICDecode` | 分块 VAE 或 fast VAE；输出标准 IMAGE、fps、裁切后的原 AUDIO |
-
-连线：
-
-```text
-LoadVideo → GetVideoComponents → 视频编码 → 高清重生成 → 分块解码 → CreateVideo → SaveVideo
-                                ↑          ↑           ↑
-                                └──── 模型与显存分块 ────┘
-```
-
-`GetVideoComponents` 的 fps 接编码节点，audio 接解码节点。VHS 的 IMAGE/AUDIO/fps 也可以接入。
-采样输出的 LATENT 包含 IC 的标准化 latent 和裁切元数据，**请使用配套 IC 解码节点**。
+- [官方 IC 模型与三个 LoRA](https://huggingface.co/Efficient-Large-Model/Open-H3-Regenerate-2K-IC/tree/main/lora)
+- [NVIDIA 参考代码](https://github.com/NVlabs/Sana/tree/sol-engine/models/Open-H3-Regenerate-2K/IC)
+- [本插件仓库](https://github.com/kkget/ComfyUI-Open-H3-Regenerate-IC)
 
 ## 安装
 
-将本目录放入 `ComfyUI/custom_nodes/ComfyUI-Open-H3-Regenerate-IC`。
-使用启动 ComfyUI 的同一个 Python 安装依赖：
+需要支持原生 MiniMax H3 的新版 ComfyUI；已在 **ComfyUI 0.44.0** 验证。旧版找不到 H3 或 `minimax` CLIP 类型时先升级 ComfyUI。
 
-```powershell
-cd C:\Comfyui
-.\.venv\Scripts\python.exe -m pip install -r custom_nodes\ComfyUI-Open-H3-Regenerate-IC\requirements.txt
+```bash
+cd ComfyUI/custom_nodes
+git clone https://github.com/kkget/ComfyUI-Open-H3-Regenerate-IC.git
+cd ComfyUI-Open-H3-Regenerate-IC
+python -m pip install -r requirements.txt
+python scripts/download_models.py --assets-only
 ```
 
-其他安装方式将上面的 Python 路径换成对应环境的解释器。需要 NVIDIA CUDA GPU、
-PyTorch ≥ 2.10、包含 MiniMax-H3 modular pipelines 的 Diffusers ≥ 0.40、Transformers ≥ 5.6。
-本插件不自动替换 PyTorch/CUDA，也不在导入节点时加载 Diffusers。
+请使用启动 ComfyUI 的同一个 Python；便携版用其 `python_embeded/python.exe`。
+依赖使用 ComfyUI 自带的 PyTorch、safetensors、einops；额外依赖只有下载脚本使用的 huggingface_hub。
+`--assets-only` 仅下载官方静音潜变量和 Sharp 参考曲线，合计约 60 KB。它们保存在插件 `assets/` 中，不需要音频 VAE。
 
-下载官方完整 IC 模型目录（**约 150 GB**，以实际仓库为准）：
+重启 ComfyUI，在 `video/Open H3 IC` 分类找到四个节点。
 
-```powershell
-.\.venv\Scripts\python.exe custom_nodes\ComfyUI-Open-H3-Regenerate-IC\scripts\download_models.py --out models\open_h3_ic
+## 模型放置
+
+LoRA 仍需要基础 MODEL、CLIP 和 VAE；这里使用标准加载器支持的单文件版本，可以复用已有模型。
+
+| 文件 | 位置 / 加载方式 |
+| --- | --- |
+| `minimax_h3_ref2va_int8_convrot.safetensors` 或 `minimax_h3_ref2va_bf16.safetensors` | `models/diffusion_models/`，Load Diffusion Model |
+| H3 专用 Qwen3-VL-32B，如 `qwen3vl_32b_minimax_h3_int8_convrot.safetensors` | `models/text_encoders/`，Load CLIP，**type 选择 `minimax`** |
+| `minimax_h3_video_vae_fp16.safetensors` 等标准 H3 视频 VAE | `models/vae/`，Load VAE |
+| `open_h3_regenerate_2k_ic_lora.safetensors` | `models/loras/`，来自官方 IC 仓库 `lora/` |
+| `minimax_h3_hyperflow_8step_v1.0.safetensors` | `models/loras/`，同上 |
+| `minimax_h3_lms_v1.0_r64.safetensors` | `models/loras/`，同上 |
+| `minimax_h3_latent_upscaler_3d_conv_v1_bf16.safetensors` | `models/latent_upscale_models/`，官方 IC 仓库 `latent_upsampler/` |
+
+[基础模型、文本编码器与 VAE 的单文件下载](https://huggingface.co/Comfy-Org/MiniMax-H3/tree/main)。
+
+**基础模型必须是非 pruned 的 Ref2VA。** HyperFlow 需要原始 `time_embedder` 和端点时间嵌入；`*_pruned_*` 的曲线压缩模型删掉了该层，节点会明确报错。不要选择 FL2VA、Turbo 合并模型或普通 T2V 模型代替。
+
+使用上表的三个官方 LoRA 原文件，**无需预转换或重命名**。已转换的 `*_comfy*` IC/HyperFlow 文件不适用。
+LoRA 加载器会处理 Q/K/V 行切片、SwiGLU 半行顺序、HyperFlow 双时间嵌入和 LMS Sharp 的 50 个曲线分支；无需另外安装 HyperFlow 插件。
+
+自动下载三个 LoRA、作者 3D 放大模型和小资产（约 12 GB；不下载基础 MODEL / CLIP / VAE）：
+
+```bash
+python scripts/download_models.py --comfy-root /path/to/ComfyUI
 ```
 
-下载脚本来自上游，会下载基础 Ref2VA transformer、32B 文本编码器、VAE、三个适配器、
-潜空间放大模型、静音 latent 和 fast VAE，并提取 Sharp 曲线。支持 Hugging Face 登录状态。
-重启 ComfyUI 后，Loader 的 `weights_dir` 填 `open_h3_ic` 或实际绝对路径。
-节点运行时从本地加载，不自动下载大模型。
+Windows 例子：`python scripts/download_models.py --comfy-root C:\Comfyui`。手动下载时按表放置，再运行一次 `--assets-only`。
+脚本固定官方 IC 仓库版本 `54a7104b204fb46486cf85c2f600942118186d57`，Sharp 曲线有 SHA256 校验。已有同名模型文件会保留。
 
-目录示意：
+## 工作流
+
+直接拖入以下 UI 工作流，选择输入视频与本机模型文件：
+
+- [2K 示例](workflows/OpenH3IC_2K.json)
+- [低显存 768p 示例](workflows/OpenH3IC_LowVRAM_768p.json)
+
+同目录 `*_api.json` 用于 API。旧版独立 Diffusers 管线的工作流需要替换成新版示例。
+
+连接方式：
 
 ```text
-models/open_h3_ic/
-  config.json
-  base_model/{transformer_ref,vae,text_encoder,tokenizer,processor,...}/
-  lora/{open_h3_regenerate_2k_ic_lora,minimax_h3_hyperflow_8step_v1.0,minimax_h3_lms_v1.0_r64}.safetensors
-  latent_upsampler/minimax_h3_latent_upscaler_3d_conv_v1_bf16.safetensors
-  assets/silence_audio_124f.safetensors
-  sharp/lms_curve.bin
-  vae_fast/fast_h3_vae_v2_24l.safetensors
+Load Diffusion Model → IC Official LoRA Loader → MODEL + SIGMAS → IC Sample
+CLIP + VAE + 输入视频 → IC Encode Draft → CONDITIONING + LATENT → IC Sample
+IC Sample → LATENT → IC Tiled Decode（另接 VAE）→ IMAGE + fps + AUDIO
+                                                       ↓
+                                              Create Video → Save Video
 ```
+
+1. **Official LoRA Loader**：基础 MODEL 接入，选择三个官方文件；默认 `up3`、Sharp 1.0。输出 MODEL 与 SIGMAS。
+2. **Encode Draft**：接 H3 CLIP、视频 VAE、输入帧及帧率。caption 建议填草稿原始提示词；节点自动加上官方增强指令和草稿视觉上下文。可接输入音频。
+3. **Sample**：接以上输出；固定 Euler、CFG 1，使用官方 HyperFlow 时间表。
+4. **Tiled Decode**：接视频 VAE 和采样结果，输出帧、24 fps 与输入音轨；无输入音轨时输出静音。
+
+输入按 24 fps 取前 124 帧，至少需要 113 个实际帧（约 4.7 秒）。末尾不足 124 帧时重复最后一帧，输出会裁回实际长度。
+较长输入只处理前约 5.2 秒。草稿采用官方横向画布并居中裁剪；1080p 在 1088 行计算后裁切，4K 在 2176 行计算后裁切。
+`hf8` 使用纯噪声初始化；`up3` / `up4` 使用作者 3D 潜空间放大结果，再从官方时间表的最后 3 / 4 步去噪。
 
 ## 显存分块
 
-Transformer 的大序列激活和 Q/K/V 保存在 **CPU 内存**，按 token 块、注意力头分组搬到 GPU。
-前馈、AdaLN、残差、输出投影同样分块，不生成完整序列的 GPU 前馈激活。
-每个 query 仍访问**全部 reference、text、audio、target keys**，没有切断视频上下文。
-
-| 参数 | 默认 | 调整方式 |
+| 选项 | 作用 | 默认 / 更省显存的起点 |
 | --- | --- | --- |
-| `weight_offload` | `cpu` | 逐层权重卸载；`disk` 进一步节省 RAM；`gpu` 仅适合能容纳全部权重的设备 |
-| `token_chunk` | 1024 | 每次投影、前馈和 query 行数；显存紧张降至 512／256 |
-| `head_chunk` | 4 | 同时计算的头数；显存紧张降至 2／1，56 个头仍全部计算 |
-| `attention` | `sdpa` | 使用融合 SDPA；`online` 用稳定的在线 softmax 遍历全部 K/V，进一步降低峰值但更慢 |
-| `key_chunk` | 2048 | `online` 模式每次读取的 key 行数 |
-| `vae_tile` / `vae_overlap` | 256 / 64 | 像素空间分块，空间与时间输出在 CPU 拼接；保留原生时间重叠规则 |
-| `upscale_frames` / `upscale_overlap` | 5 / 5 | 潜空间放大每块的中心帧数／两侧上下文；frames=0 关闭时间分块 |
-| `upscale_tile` | 64 | 放大器输入的 latent 空间块边长，带重叠融合；0 关闭空间分块 |
-| `oom_retries` | 2 | Transformer OOM 时缩小 token、head、key 块，改用 online，重试同一未更新的采样步骤 |
+| `token_chunk` | QKV、输出投影和 FFN 每批 token 数 | 1024 / 512 或 256 |
+| `head_chunk` | 同时计算的注意力头数 | 4 / 1 |
+| `attention` | `sdpa` 融合注意力；`online` 将 K/V 也分批传入 GPU | sdpa / online |
+| `key_chunk` | online 模式每批 key 数 | 2048 / 1024 |
+| `vae_tile` / `vae_overlap` | 原生 H3 VAE 实际使用的像素分块与重叠 | 256/64 / 192/48 |
+| `upscale_frames` / `upscale_overlap` | 3D 放大每批潜帧与前后上下文 | 5/5 |
+| `upscale_tile` | 3D 放大空间分块，单位为输入潜像素；0 关闭 | 64 / 32 |
+| `oom_retries` | 采样 CUDA OOM 后缩小分块、切换 online，用同一噪声重新采样 | 2 |
 
-`disk` 首次创建权重缓存可能再占用 **100 GB 以上 SSD**；目录可在 `offload_dir` 指定。
-CPU 激活依然占用内存，分块以更多 RAM、磁盘和 PCIe 传输换显存，速度会低于多卡原版。
-2K／4K 的完整上下文注意力计算量仍然很大，**没有承诺任意显卡都能运行，也没有 24 GB 完整推理实测**。
+**注意力始终覆盖全部上下文**，online 使用 FP32 稳定 softmax 累积，不是局部注意力或对各块结果简单平均。
+Q/K/V 暂存系统内存；基础模型权重继续由 ComfyUI 原生加载、量化与卸载机制管理。所有模型 forward 修改通过 ModelPatcher 克隆安装和恢复，不修改 ComfyUI 核心。
 
-注意力分块在浮点误差内保持完整计算。**潜空间放大器的时间／空间分块会改变 GroupNorm 的统计区域**，
-所以可能轻微改变细节；重叠用于减轻边缘差异。若要使用原版整段放大路线，将
-`upscale_frames=0`、`upscale_tile=0`。VAE 的 tile 参数改变也可能影响图像边缘融合。
+分块会降低速度并增加内存用量，2K/4K 仍可能超出显存或系统内存；建议先跑低显存 768p 示例，并使用量化基础模型和 H3 文本编码器。
+OOM 重试只涵盖扩散采样；编码/解码或放大阶段 OOM 时，请减小对应的 tile。完整残差流和当前层权重仍需占用显存，不能承诺任意显卡都能运行 2K。
 
-`standard` 解码默认采用分块完整版 VAE；`fast_auto` 使用上游自动引擎选择，
-显存估计不足或实际 OOM 时回退分块 VAE。Blackwell fast 引擎额外依赖 FlashAttention-4、Triton、quack，
-没有安装时使用 PyTorch 参考引擎或分块 VAE；Windows 不要求安装这些加速库。
+为确保 VAE 分块有效，请用**标准 H3 视频 VAE**。Sol 非因果整段解码器不能分块，新节点会提示换用标准 VAE。
+原生 VAE 使用 ComfyUI 的 posterior mean 编码；官方独立脚本从 posterior 采样。潜空间放大空间分块也会稍微改变 GroupNorm 统计，因此不承诺逐位复现独立脚本。
+`lora_dtype=bf16` 只将 IC/Sharp 因子在 RAM 中转为 BF16，原文件保持不变；若要保留原始 FP32 因子，选 `fp32`，会使用更多系统内存。
 
-## 示例工作流
+## 验证
 
-- [2K UI 工作流](workflows/OpenH3IC_2K.json)
-- [低显存 768p UI 工作流](workflows/OpenH3IC_LowVRAM_768p.json)：disk、256 token、1 head、online attention
-- 同目录的 `*_api.json` 用于 ComfyUI API。
-
-把 UI JSON 拖入 ComfyUI，选择 `draft.mp4`，在 caption 中填写**草稿视频生成时的原提示词**，可留空。
-节点自动加上官方“增强同一视频、保留场景与时序”的任务描述，不需要手动重复。
-编码 seed 和采样 seed 默认均为 0，分别控制 VAE 后验采样和 IC 噪声。
-
-官方输入约束：24 fps 的前 124 帧，至少 **113 个真实帧（约 4.7 秒）**。
-短尾重复最后一帧；更长的视频只处理前约 5.17 秒。本插件不将长视频自动拆段。
-高分辨率输出使用 1344×768 草稿画布，768p 输出支持 672×384／896×512／1024×576。
-1080p 内部计算 1920×1088 后居中裁成 1080；4K 内部计算 3840×2176 后裁成 2160。
-
-| 采样器 | 步数 | 起点 |
-| --- | --- | --- |
-| `up3` | 3 | 放大草稿，σ≈0.835（默认） |
-| `up4` | 4 | 放大草稿，σ≈0.923 |
-| `hf8` | 8 | 纯噪声，但保留同样的低清视频参考上下文 |
-
-CFG 固定为 1；音频 token 使用官方静音 latent，成片音轨取自原视频。
-
-## 验证状态
-
-本机已通过 17 项测试：在线 softmax 与完整 SDPA 的数值对照，query/head 分块对照，
-真实 Diffusers 小型 H3 Transformer（含 IC LoRA、HyperFlow 双时间嵌入及 Sharp 曲线）对照，
-CUDA 下 Accelerate CPU／磁盘卸载、BF16 融合注意力、原生 VAE 时间重叠的 CPU 拼接对照，
-帧重采样、布局时间步、放大分块覆盖及工作流接口验证。另已在 ComfyUI 0.22.3 中实际注册全部四个节点。
-这些测试不下载训练权重。完整 2K／4K 成片质量、峰值显存和速度尚未实测。
-
-```powershell
-$env:USE_TF="0"  # 仅测试进程，避免无关 TensorFlow 安装的导入冲突
-python -m pytest tests -q
+```bash
+COMFYUI_PATH=/path/to/ComfyUI IC_TEST_CPU=1 python -m pytest tests -q
 ```
 
-源代码固定于 NVLabs/Sana `1e3c9c27ce56ca03b203cff9f63bed225a1599cd`。
-详见 [第三方来源与许可](THIRD_PARTY.md)。本项目非 MiniMax 官方产品。Powered by MiniMax H3.
+Windows PowerShell 先设置 `$env:COMFYUI_PATH='C:\path\to\ComfyUI'` 与 `$env:IC_TEST_CPU='1'`。
+测试覆盖真实原生 H3 模块的 IC 映射、三 LoRA 组合前向、分块数值一致性、原生 Euler 采样静音固定、OOM 重启、VAE 参数恢复及 ComfyUI 工作流校验。CUDA 测试在有 GPU 时运行。
+CI 固定经验证的 ComfyUI 核心提交；测试使用小模型，不下载完整基础权重。当前未完成完整官方权重的 2K 视频端到端生成测试。
+
+代码许可证及来源见 [THIRD_PARTY.md](THIRD_PARTY.md)。模型与从模型提取的小资产遵循各自的模型许可，不随插件代码打包。Powered by MiniMax H3。

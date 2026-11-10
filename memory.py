@@ -1,14 +1,7 @@
-"""Exact full-context H3 forward with CPU activation storage.
-
-Only row chunks, a group of attention heads, and the currently executing weights
-need to fit on the GPU. This avoids allocating full-sequence FFN intermediates,
-Q/K/V, AdaLN broadcasts, and residual copies on the GPU. Arithmetic follows the
-Diffusers MiniMaxH3Transformer3DModel; it does not split the attention document.
-"""
+"""Native H3 full-context attention with CPU Q/K/V storage and chunked projections/FFN."""
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from types import MethodType
 import math
 
 import torch
@@ -21,7 +14,6 @@ class MemorySettings:
     head_chunk: int = 4
     key_chunk: int = 2048
     attention: str = "sdpa"
-    weight_offload: str = "cpu"
     vae_tile: int = 256
     vae_overlap: int = 64
     upscale_frames: int = 5
@@ -94,109 +86,59 @@ def full_context_attention(q, k, v, settings, device, check=lambda: None):
     return result
 
 
-def _dtype(module):
-    from diffusers.models.modeling_utils import get_parameter_dtype
-    return get_parameter_dtype(module)
-
-
-def _project_to_cpu(module, x, size, device, check):
-    out = None
-    for start, end in chunks(x.shape[1], size):
-        check()
-        y = module(x[:, start:end].to(device=device, dtype=_dtype(module)))
-        if out is None:
-            out = torch.empty((x.shape[0], x.shape[1], y.shape[-1]), dtype=y.dtype, device="cpu")
-        out[:, start:end] = y.cpu()
-    return out
-
-
-def _modulated_norm(block, x, indices, table, which, device):
-    shift, scale = table[which:which + 2]
-    norm = block.norm1 if which == 0 else block.norm2
-    return norm(x.to(device)) * (1 + scale.index_select(0, indices)) + shift.index_select(0, indices)
-
-
-def streamed_forward(self, hidden_states, audio_hidden_states, encoder_hidden_states,
-                     timestep, timestep_indices, token_tags, position_ids,
-                     video_indices, audio_indices, text_indices,
-                     attention_kwargs=None, return_dict=True):
-    """Drop-in forward; weights may be resident, CPU-offloaded or disk-offloaded."""
-    from diffusers.models.transformers.transformer_minimax_h3 import (
-        MiniMaxH3TransformerOutput, _apply_rotary_emb,
-    )
-    settings, device, check = self._ic_memory, self._ic_device, self._ic_check
-    check()
-    video_indices, audio_indices, text_indices = [
-        i.cpu() for i in (video_indices, audio_indices, text_indices)]
-    position_ids, timestep_indices, token_tags = [
-        i.cpu() for i in (position_ids, timestep_indices, token_tags)]
-    timestep = timestep.to(device)
-    # The token-refiner sequence is small (Qwen vision/text context only).
-    text = self.context_embedder(encoder_hidden_states.to(device, _dtype(self.context_embedder)))
-    text = self.token_refiner(text)
-    x = torch.zeros((text.shape[0], len(position_ids), text.shape[-1]), dtype=text.dtype, device="cpu")
-    x.index_copy_(1, text_indices, text.cpu())
-    del text
-    for projection, rows, indices in ((self.proj_in, hidden_states, video_indices),
-                                      (self.audio_proj_in, audio_hidden_states, audio_indices)):
-        projected = _project_to_cpu(projection, rows, settings.token_chunk, device, check)
-        x.index_copy_(1, indices, projected.to(x.dtype))
-        del projected
-    temb = self.time_embedder(self.time_proj(timestep).to(_dtype(self.time_embedder)))
-    adaln = timestep_indices * 3 + token_tags
-    for block_index, block in enumerate(self.transformer_blocks):
-        check()
-        table = block.adaln_proj(temb)
-        q = k = v = None
-        # Store full Q/K/V on CPU; GPU projections and RoPE see only a row chunk.
-        for start, end in chunks(x.shape[1], settings.token_chunk):
+def attention_forward(attn, settings):
+    def run(x, rope_freqs=None, transformer_options=None):
+        import comfy.model_management as mm
+        import comfy.quant_ops
+        check = mm.throw_exception_if_processing_interrupted
+        n, h, d = len(x), attn.heads, attn.head_dim
+        q, k, v = [torch.empty((1, n, h, d), dtype=x.dtype, device="cpu") for _ in range(3)]
+        for start, end in chunks(n, settings.token_chunk):
             check()
-            idx = adaln[start:end].to(device)
-            norm = _modulated_norm(block, x[:, start:end], idx, table, 0, device)
-            rotary = self.rope(position_ids[start:end].to(device))
-            qq = block.attn.norm_q(block.attn.to_q(norm).unflatten(-1, (block.attn.heads, -1)))
-            kk = block.attn.norm_k(block.attn.to_k(norm).unflatten(-1, (block.attn.heads, -1)))
-            vv = block.attn.to_v(norm).unflatten(-1, (block.attn.heads, -1))
-            qq, kk = _apply_rotary_emb(qq, *rotary), _apply_rotary_emb(kk, *rotary)
-            if q is None:
-                shape = (x.shape[0], x.shape[1], *qq.shape[2:])
-                q, k, v = [torch.empty(shape, dtype=qq.dtype, device="cpu") for _ in range(3)]
-            q[:, start:end], k[:, start:end], v[:, start:end] = qq.cpu(), kk.cpu(), vv.cpu()
-            del norm, qq, kk, vv, rotary
-        attn = full_context_attention(q, k, v, settings, device, check).flatten(2, 3)
+            qq, kk, vv = attn.qkv_proj(x[start:end]).split(h * d, dim=-1)
+            qq, kk = qq.reshape(1, end - start, h, d), kk.reshape(1, end - start, h, d)
+            if rope_freqs is None:
+                qq, kk = attn.q_norm(qq), attn.k_norm(kk)
+            else:
+                freqs = rope_freqs[:, start:end]
+                comfy.quant_ops.ck.rms_rope_split_half_(
+                    qq, kk, freqs, mm.cast_to(attn.q_norm.weight, device=x.device),
+                    mm.cast_to(attn.k_norm.weight, device=x.device),
+                    epsilon=attn.q_norm.eps, rot_dim=freqs.shape[-3] * 2)
+            q[:, start:end], k[:, start:end] = qq.cpu(), kk.cpu()
+            v[:, start:end] = vv.reshape(1, end - start, h, d).cpu()
+            del qq, kk, vv
+        result = full_context_attention(q, k, v, settings, x.device, check).reshape(n, h * d)
         del q, k, v
-        # AdaLN, residual and FFN intermediates are chunked as well. No broadcast
-        # of a full sequence's six AdaLN tables is ever materialized on the GPU.
-        for start, end in chunks(x.shape[1], settings.token_chunk):
+        out = torch.empty_like(x)
+        for start, end in chunks(n, settings.token_chunk):
             check()
-            idx = adaln[start:end].to(device)
-            residual = x[:, start:end].to(device)
-            out = block.attn.to_out[1](block.attn.to_out[0](attn[:, start:end].to(device)))
-            state = residual + table[2].index_select(0, idx) * out
-            norm = _modulated_norm(block, state, idx, table, 3, device)
-            state = state + table[5].index_select(0, idx) * block.ff(norm)
-            x[:, start:end] = state.cpu()
-            del residual, out, state, norm
-        del attn, table
-        if self._ic_block_progress is not None:
-            self._ic_block_progress(block_index + 1, len(self.transformer_blocks))
-    outputs = []
-    for projection, indices in ((self.proj_out, video_indices), (self.audio_proj_out, audio_indices)):
-        result = torch.empty((x.shape[0], len(indices), projection.out_features), dtype=_dtype(projection), device="cpu")
-        for start, end in chunks(len(indices), settings.token_chunk):
-            check()
-            selected = indices[start:end]
-            norm = self.norm_out(x.index_select(1, selected).to(device), temb,
-                                 timestep_indices[selected].to(device))
-            result[:, start:end] = projection(norm.to(_dtype(projection))).cpu()
-        outputs.append(result)
-    if not return_dict:
-        return tuple(outputs)
-    return MiniMaxH3TransformerOutput(sample=outputs[0], audio_sample=outputs[1])
+            out[start:end] = attn.out_proj(result[start:end].to(x.device))
+        return out
+    return run
 
 
-def install_streaming(model, settings, device, check=lambda: None, block_progress=None):
-    model._ic_memory, model._ic_device = settings, torch.device(device)
-    model._ic_check, model._ic_block_progress = check, block_progress
-    model.forward = MethodType(streamed_forward, model)
-    return model
+def ffn_forward(mlp, settings):
+    forward = type(mlp).forward
+
+    def run(x):
+        import comfy.model_management as mm
+        out = torch.empty_like(x)
+        for start, end in chunks(len(x), settings.token_chunk):
+            mm.throw_exception_if_processing_interrupted()
+            out[start:end] = forward(mlp, x[start:end])
+        return out
+    return run
+
+
+def apply_memory(model, settings):
+    """Only this ModelPatcher clone changes. Native quantization and offload remain active."""
+    out = model.clone()
+    dm = out.get_model_object("diffusion_model")
+    for prefix, blocks in (("blocks", dm.blocks), ("token_refiner.blocks", dm.token_refiner.blocks)):
+        for i, block in enumerate(blocks):
+            root = f"diffusion_model.{prefix}.{i}"
+            out.add_object_patch(root + ".attn.forward", attention_forward(block.attn, settings))
+            out.add_object_patch(root + ".mlp.forward", ffn_forward(block.mlp, settings))
+    out.model_options["open_h3_ic_memory"] = settings
+    return out

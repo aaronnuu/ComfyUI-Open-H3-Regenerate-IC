@@ -5,3 +5,4 @@ __pycache__/
 weights/
 offload/
 *.dat
+assets/
