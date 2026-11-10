@@ -1,4 +1,8 @@
-"""Numerical checks on real ComfyUI H3 modules, not mocked inference."""
+"""Numerical checks on real ComfyUI H3 modules, not mocked inference.
+
+Modified by aaronnuu (zoetrope), 2026-11-10: the composed-forward check also covers attention
+"native", and a new test checks that "native" patches only the FFN.
+"""
 import os
 from pathlib import Path
 from types import SimpleNamespace

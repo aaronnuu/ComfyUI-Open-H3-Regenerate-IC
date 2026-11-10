@@ -1,8 +1,9 @@
 """Native H3 full-context attention with CPU Q/K/V storage and chunked projections/FFN.
 
 Modified by aaronnuu (zoetrope), 2026-11-10: attention "native" leaves every attention forward to
-ComfyUI, so its optimized backend runs (int8 with --use-ck-attention, about 4x the per-token speed
-of the SDPA path on an RTX 3090) with Q/K/V on the GPU; only the FFN is chunked by token_chunk.
+ComfyUI, so its optimized backend runs (int8 with --use-ck-attention: 181 s a step against about
+660 s for the SDPA path, 1080p on an RTX 3090) with Q/K/V on the GPU; only the FFN is chunked by
+token_chunk. It needs about 12.5 GB of VRAM free at 1080p.
 """
 from __future__ import annotations
 

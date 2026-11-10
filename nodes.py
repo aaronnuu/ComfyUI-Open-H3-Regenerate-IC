@@ -1,4 +1,8 @@
-"""Four native ComfyUI nodes. Model loading/offloading belongs to ComfyUI."""
+"""Four native ComfyUI nodes. Model loading/offloading belongs to ComfyUI.
+
+Modified by aaronnuu (zoetrope), 2026-11-10: OpenH3ICLoader's attention input gains the "native"
+mode (memory.py), which leaves every attention forward to ComfyUI's own backend.
+"""
 CATEGORY = "video/Open H3 IC"
 IC = "open_h3_regenerate_2k_ic_lora.safetensors"
 HF = "minimax_h3_hyperflow_8step_v1.0.safetensors"
