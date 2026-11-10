@@ -62,7 +62,7 @@ def test_official_ic_mapping_uses_attention_inner_width_and_swaps_swiglu(tmp_pat
 
 
 @needs_core
-@pytest.mark.parametrize("mode", ["sdpa", "online"])
+@pytest.mark.parametrize("mode", ["sdpa", "online", "native"])
 @pytest.mark.parametrize("sampler", ["up3", "hf8"])
 @torch.inference_mode()
 def test_composed_hyperflow_sharp_ic_full_forward_matches_chunks(tmp_path, mode, sampler):
@@ -95,6 +95,23 @@ def test_composed_hyperflow_sharp_ic_full_forward_matches_chunks(tmp_path, mode,
         for g, w in zip(got, want):
             torch.testing.assert_close(g, w, rtol=2e-4, atol=3e-5)
     assert not hasattr(base.model.diffusion_model.blocks[0].attn.forward, "_ic_memory")
+
+
+@needs_core
+def test_native_attention_keeps_core_attention_and_chunks_only_the_ffn(tmp_path):
+    # Modified by aaronnuu (zoetrope), 2026-11-10: "native" leaves every attention forward to ComfyUI,
+    # so its optimized backend (int8 with --use-ck-attention) runs; only the FFN is token-chunked.
+    base, paths, _ = recipe_files(tmp_path)
+    patched, _ = apply_recipe(base, *paths, dtype=torch.float32)
+    native = apply_memory(patched, MemorySettings(token_chunk=7, attention="native"))
+    dm = base.model.diffusion_model
+    for prefix, blocks in (("blocks", dm.blocks), ("token_refiner.blocks", dm.token_refiner.blocks)):
+        for i in range(len(blocks)):
+            root = f"diffusion_model.{prefix}.{i}"
+            assert root + ".attn.forward" not in native.object_patches
+            assert root + ".mlp.forward" in native.object_patches
+    assert native.model_options["open_h3_ic_memory"].attention == "native"
+    assert MemorySettings(attention="native").reduced().attention == "online"
 
 
 @needs_core

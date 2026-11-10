@@ -27,7 +27,7 @@ class OpenH3ICLoader:
             "lora_dtype": (["bf16", "fp32"], {"default": "bf16", "tooltip": "IC/Sharp factor storage in RAM; bf16 halves the FP32 IC file's RAM footprint."}),
             "token_chunk": ("INT", {"default": 1024, "min": 64, "max": 16384, "step": 64}),
             "head_chunk": ("INT", {"default": 4, "min": 1, "max": 56}),
-            "attention": (["sdpa", "online"], {"default": "sdpa", "tooltip": "Both use full context. online streams K/V from RAM; slower but uses less VRAM."}),
+            "attention": (["sdpa", "online", "native"], {"default": "sdpa", "tooltip": "All use full context. online streams K/V from RAM; slower but uses less VRAM. native (aaronnuu/zoetrope) keeps ComfyUI's own attention backend with Q/K/V on the GPU: fastest, most VRAM; token_chunk then chunks only the FFN."}),
             "key_chunk": ("INT", {"default": 2048, "min": 128, "max": 16384, "step": 128}),
         }}
     RETURN_TYPES = ("MODEL", "SIGMAS")
